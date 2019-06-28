@@ -1,0 +1,3 @@
+[
+	{ "caption": "Project: Exclude files ignored by git", "command": "exclude_from_gitignore" }
+]

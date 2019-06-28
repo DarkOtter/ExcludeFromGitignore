@@ -2,18 +2,25 @@
 import os, os.path
 import subprocess
 import json
-from typing import List, Optional
 
-def get_git_ignores(path: str)-> Optional[List[str]]:
-	result = subprocess.run(
+def get_git_ignores(path):
+	# Sublime Text does not support subprocess.run
+	proc = subprocess.Popen(
 		["git", "clean", "--dry-run", "-dX"],
 		stdout=subprocess.PIPE,
 		stderr=subprocess.DEVNULL,
 		cwd=path)
 
-	if result.returncode != 0: return None
+	try:
+		output, _ = proc.communicate(timeout=5)
+	except TimeoutExpired:
+		proc.kill()
+		_, _ = proc.communicate()
+		raise RuntimeError("Could not get git ignored files")
 
-	output = result.stdout.decode()
+	if proc.returncode != 0: return None
+
+	output = output.decode()
 	res = []
 	prefix = 'Would remove '
 	for line in output.split('\n'):
@@ -91,24 +98,21 @@ if __name__ == '__main__':
 else:
 	import sublime
 	import sublime_plugin
-	class ExcludeFromGitignore(sublime_plugin.TextCommand):
+
+	class ExcludeFromGitignoreCommand(sublime_plugin.WindowCommand):
 		def description(self):
-			return "Add exclusions to project file based on git ignored files"
+			return "Exclude files from current project based on git ignored files"
 
 		def is_enabled(self):
-			window = self.view.window()
-			project_file = window.project_file_name()
+			project_file = self.window.project_file_name()
 			return project_file is not None
 
 		def is_visible(self):
-			self.is_enabled()
+			return self.is_enabled()
 
-
-		def run(self, edit):
-			window = self.view.window()
-			project_file = window.project_file_name()
-			window.status_message(repr(project_file))
-			# if project_file is None: return
-			# project_data = window.project_data()
-			# new_project_data = process_project_data(project_data, os.path.dirname(project_file))
-			# window.set_project_data(new_project_data)
+		def run(self):
+			project_file = self.window.project_file_name()
+			if project_file is None: return
+			project_data = self.window.project_data()
+			new_project_data = process_project_data(project_data, os.path.dirname(project_file))
+			self.window.set_project_data(new_project_data)
